@@ -27,13 +27,22 @@ Build a lightweight Telegram Mini App that allows users to:
 
 Telegram Mini App
 ↓
-Next.js
+Next.js via vinext on Cloudflare Workers
 ↓
 Shopify Storefront API
 ↓
 Shopify Cart
 ↓
 Shopify Checkout
+
+## Deployment target
+
+The application deployment target is Cloudflare Workers. The project uses vinext,
+Vite, and Wrangler, with configuration in `vite.config.ts` and `wrangler.jsonc`.
+No KV or Cloudflare Images resources are configured.
+
+Current public Worker URL:
+https://slink-telegram-app.delicate-brook-10e2.workers.dev
 
 ## Source of truth
 
