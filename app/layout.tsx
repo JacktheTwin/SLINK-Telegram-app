@@ -1,5 +1,7 @@
 import { CartProvider } from "@/components/cart-provider";
+import { TelegramWebAppInitializer } from "@/components/telegram-web-app-initializer";
 import type { Metadata } from "next";
+import Script from "next/script";
 import type { ReactNode } from "react";
 import "./globals.css";
 
@@ -14,9 +16,16 @@ type RootLayoutProps = Readonly<{
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="it">
+    <html lang="it" suppressHydrationWarning>
       <body>
-        <CartProvider>{children}</CartProvider>
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js?63"
+          strategy="beforeInteractive"
+        />
+        <CartProvider>
+          {children}
+          <TelegramWebAppInitializer />
+        </CartProvider>
       </body>
     </html>
   );

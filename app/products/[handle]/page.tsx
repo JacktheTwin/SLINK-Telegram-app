@@ -30,7 +30,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         : "Impossibile recuperare il prodotto.";
 
     return (
-      <main className="mx-auto min-h-dvh max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <main className="telegram-safe-page mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <nav className="flex items-center justify-between gap-4">
           <Link className="text-sm font-medium text-neutral-600" href="/">
             ← Tutti i prodotti
@@ -52,7 +52,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+    <main className="telegram-safe-page mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
       <nav className="flex items-center justify-between gap-4">
         <Link
           className="inline-flex text-sm font-medium text-neutral-600 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"

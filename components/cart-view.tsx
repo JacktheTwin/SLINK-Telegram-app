@@ -3,10 +3,8 @@
 import { useCart } from "@/components/cart-provider";
 import type { ShopifyMoney } from "@/lib/shopify";
 import type { ShopifyCartLine } from "@/lib/shopify/cart";
-import { openCheckout } from "@/lib/shopify/checkout";
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState } from "react";
 
 function formatMoney(money: ShopifyMoney): string {
   return new Intl.NumberFormat("it-CH", {
@@ -30,17 +28,14 @@ export function CartView() {
   const {
     cart,
     error,
+    isCheckingOut,
     isInitializing,
     isMutating,
     notice,
-    prepareCheckout,
     refreshCart,
     removeLine,
     updateLineQuantity,
   } = useCart();
-  const checkoutLockRef = useRef(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const isBusy = isMutating || isCheckingOut;
 
   function decreaseLine(line: ShopifyCartLine) {
@@ -50,44 +45,6 @@ export function CartView() {
     }
 
     void updateLineQuantity(line.id, line.quantity - 1);
-  }
-
-  async function handleCheckout(): Promise<void> {
-    if (checkoutLockRef.current) {
-      return;
-    }
-
-    setCheckoutError(null);
-
-    if (!cart || cart.totalQuantity < 1 || cart.lines.nodes.length === 0) {
-      setCheckoutError(
-        "Il carrello è vuoto. Aggiungi almeno un prodotto prima del checkout.",
-      );
-      return;
-    }
-
-    checkoutLockRef.current = true;
-    setIsCheckingOut(true);
-
-    try {
-      const checkoutUrl = await prepareCheckout();
-
-      if (!checkoutUrl) {
-        checkoutLockRef.current = false;
-        setIsCheckingOut(false);
-        return;
-      }
-
-      openCheckout(checkoutUrl);
-    } catch (checkoutNavigationError: unknown) {
-      setCheckoutError(
-        checkoutNavigationError instanceof Error
-          ? checkoutNavigationError.message
-          : "Non è stato possibile aprire il checkout Shopify.",
-      );
-      checkoutLockRef.current = false;
-      setIsCheckingOut(false);
-    }
   }
 
   return (
@@ -277,23 +234,6 @@ export function CartView() {
               </p>
             ) : null}
 
-            {checkoutError ? (
-              <p
-                className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-                role="alert"
-              >
-                {checkoutError}
-              </p>
-            ) : null}
-
-            <button
-              className="mt-5 w-full rounded-xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-400"
-              disabled={isBusy || !cart.checkoutUrl?.trim()}
-              onClick={() => void handleCheckout()}
-              type="button"
-            >
-              {isCheckingOut ? "Apertura checkout..." : "Checkout"}
-            </button>
           </aside>
         </div>
       )}

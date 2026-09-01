@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function ProductNotFound() {
   return (
-    <main className="flex min-h-dvh items-center justify-center px-4 py-10">
+    <main className="telegram-safe-page flex items-center justify-center px-4 py-10">
       <div className="max-w-md text-center">
         <p className="text-sm font-medium text-neutral-500">404</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">

@@ -36,6 +36,7 @@ export type ShopifyProduct = {
   availableForSale: boolean;
   featuredImage: ShopifyProductImage | null;
   price: ShopifyMoney;
+  priceVaries: boolean;
   compareAtPrice: ShopifyMoney | null;
 };
 
@@ -78,9 +79,16 @@ type ProductNode = {
   featuredImage: ShopifyProductImage | null;
   priceRange: {
     minVariantPrice: ShopifyMoney;
+    maxVariantPrice: ShopifyMoney;
   };
-  compareAtPriceRange: {
-    minVariantPrice: ShopifyMoney;
+  variants: {
+    nodes: Array<{
+      price: ShopifyMoney;
+      compareAtPrice: ShopifyMoney | null;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+    };
   };
 };
 
@@ -250,11 +258,24 @@ const PRODUCTS_QUERY = `
             amount
             currencyCode
           }
-        }
-        compareAtPriceRange {
-          minVariantPrice {
+          maxVariantPrice {
             amount
             currencyCode
+          }
+        }
+        variants(first: 250) {
+          nodes {
+            price {
+              amount
+              currencyCode
+            }
+            compareAtPrice {
+              amount
+              currencyCode
+            }
+          }
+          pageInfo {
+            hasNextPage
           }
         }
       }
@@ -329,6 +350,55 @@ function getCompareAtPrice(
   return compareAtPrice;
 }
 
+function hasSameMoneyValue(
+  first: ShopifyMoney,
+  second: ShopifyMoney,
+): boolean {
+  if (first.currencyCode !== second.currencyCode) {
+    return false;
+  }
+
+  const firstAmount = Number.parseFloat(first.amount);
+  const secondAmount = Number.parseFloat(second.amount);
+
+  return (
+    Number.isFinite(firstAmount) &&
+    Number.isFinite(secondAmount) &&
+    firstAmount === secondAmount
+  );
+}
+
+function getProductCompareAtPrice(
+  product: ProductNode,
+  lowestPrice: ShopifyMoney,
+): ShopifyMoney | null {
+  const variants = product.variants.nodes;
+
+  if (variants.length === 0 || product.variants.pageInfo.hasNextPage) {
+    return null;
+  }
+
+  const everyVariantIsDiscounted = variants.every(
+    (variant) =>
+      getCompareAtPrice(variant.price, variant.compareAtPrice) !== null,
+  );
+
+  if (!everyVariantIsDiscounted) {
+    return null;
+  }
+
+  const lowestPriceVariant = variants.find((variant) =>
+    hasSameMoneyValue(variant.price, lowestPrice),
+  );
+
+  return lowestPriceVariant
+    ? getCompareAtPrice(
+        lowestPriceVariant.price,
+        lowestPriceVariant.compareAtPrice,
+      )
+    : null;
+}
+
 export async function getProducts(): Promise<ShopifyProduct[]> {
   const data = await shopifyFetch<ProductsQuery>({
     query: PRODUCTS_QUERY,
@@ -337,6 +407,10 @@ export async function getProducts(): Promise<ShopifyProduct[]> {
 
   return data.products.nodes.map((product) => {
     const price = product.priceRange.minVariantPrice;
+    const priceVaries = !hasSameMoneyValue(
+      price,
+      product.priceRange.maxVariantPrice,
+    );
 
     return {
       id: product.id,
@@ -345,10 +419,8 @@ export async function getProducts(): Promise<ShopifyProduct[]> {
       availableForSale: product.availableForSale,
       featuredImage: product.featuredImage,
       price,
-      compareAtPrice: getCompareAtPrice(
-        price,
-        product.compareAtPriceRange.minVariantPrice,
-      ),
+      priceVaries,
+      compareAtPrice: getProductCompareAtPrice(product, price),
     };
   });
 }

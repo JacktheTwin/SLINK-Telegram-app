@@ -51,6 +51,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
           <div className="mt-auto flex flex-wrap items-baseline gap-x-2 gap-y-1 pt-3 text-sm">
             <span className="font-semibold text-neutral-900">
+              {product.priceVaries ? "Da " : ""}
               {formatMoney(product.price)}
             </span>
             {product.compareAtPrice ? (

@@ -20,7 +20,7 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-dvh px-4 py-8 sm:px-6 sm:py-10">
+    <main className="telegram-safe-page px-4 py-8 sm:px-6 sm:py-10">
       <header className="mx-auto mb-8 flex max-w-6xl items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">

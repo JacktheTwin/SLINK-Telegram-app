@@ -11,12 +11,14 @@ import {
   type ShopifyCartOperationResult,
   type ShopifyCartWarning,
 } from "@/lib/shopify/cart";
+import { openCheckout } from "@/lib/shopify/checkout";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -28,11 +30,12 @@ type CartContextValue = {
   error: string | null;
   notice: string | null;
   isInitializing: boolean;
+  isCheckingOut: boolean;
   isMutating: boolean;
   addVariant: (merchandiseId: string, quantity?: number) => Promise<boolean>;
+  checkout: () => Promise<void>;
   updateLineQuantity: (lineId: string, quantity: number) => Promise<boolean>;
   removeLine: (lineId: string) => Promise<boolean>;
-  prepareCheckout: () => Promise<string | null>;
   refreshCart: () => Promise<void>;
 };
 
@@ -80,7 +83,9 @@ export function CartProvider({ children }: CartProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+  const checkoutLockRef = useRef(false);
 
   const storeCart = useCallback((nextCart: ShopifyCart) => {
     setCart(nextCart);
@@ -407,27 +412,58 @@ export function CartProvider({ children }: CartProviderProps) {
     storeCart,
   ]);
 
+  const checkout = useCallback(async (): Promise<void> => {
+    if (checkoutLockRef.current) {
+      return;
+    }
+
+    checkoutLockRef.current = true;
+    setIsCheckingOut(true);
+
+    try {
+      const checkoutUrl = await prepareCheckout();
+
+      if (!checkoutUrl) {
+        checkoutLockRef.current = false;
+        setIsCheckingOut(false);
+        return;
+      }
+
+      openCheckout(checkoutUrl);
+    } catch (checkoutError: unknown) {
+      setError(
+        checkoutError instanceof Error
+          ? checkoutError.message
+          : "Non è stato possibile aprire il checkout Shopify.",
+      );
+      checkoutLockRef.current = false;
+      setIsCheckingOut(false);
+    }
+  }, [prepareCheckout]);
+
   const value = useMemo<CartContextValue>(
     () => ({
       cart,
       error,
       notice,
       isInitializing,
+      isCheckingOut,
       isMutating,
       addVariant,
+      checkout,
       updateLineQuantity,
       removeLine,
-      prepareCheckout,
       refreshCart,
     }),
     [
       addVariant,
       cart,
+      checkout,
       error,
+      isCheckingOut,
       isInitializing,
       isMutating,
       notice,
-      prepareCheckout,
       refreshCart,
       removeLine,
       updateLineQuantity,

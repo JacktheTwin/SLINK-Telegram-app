@@ -12,17 +12,22 @@ Il progetto contiene:
 - ESLint;
 - Cloudflare Workers come target di deploy;
 - una home mobile-first con una griglia di prodotti reali Shopify;
-- immagini, prezzi, prezzi di confronto e disponibilità dei prodotti;
+- immagini, disponibilità e prezzi Shopify con indicazione “Da” quando le
+  varianti hanno prezzi diversi;
+- prezzo barrato nel listing soltanto quando lo sconto riguarda tutte le
+  varianti del prodotto;
 - pagine prodotto dinamiche in `/products/[handle]`;
 - selezione delle opzioni con risoluzione della variante Shopify corretta;
 - disponibilità, prezzo e merchandise ID aggiornati in base alla variante scelta;
 - carrello Shopify reale in `/cart` con aggiunta, aumento, diminuzione e rimozione;
 - linee, quantità e totali sempre restituiti dalla Shopify Storefront Cart API;
 - passaggio al checkout Shopify tramite il solo `cart.checkoutUrl` restituito
-  dalla Storefront API.
+  dalla Storefront API;
+- integrazione con l'API ufficiale Telegram WebApp, senza cambiare il
+  comportamento nel browser normale.
 
 La comunicazione Shopify è centralizzata in `lib/shopify` e usa GraphQL tramite
-`fetch()`. Telegram non è ancora integrato.
+`fetch()`. L'accesso a Telegram WebApp è centralizzato in `lib/telegram.ts`.
 
 ## Carrello Shopify
 
@@ -36,7 +41,27 @@ da Shopify. Un ID scaduto o non valido viene rimosso in modo sicuro.
 Il pulsante Checkout verifica nuovamente il carrello tramite Shopify e apre
 esclusivamente il suo `checkoutUrl`. Il frontend non ricostruisce né sostituisce
 alcuna parte del checkout Shopify. Un carrello vuoto, un URL mancante o un errore
-di rete vengono mostrati in modo leggibile; il pulsante impedisce invii duplicati.
+di rete vengono mostrati in modo leggibile; un lock condiviso impedisce invii
+duplicati durante la preparazione asincrona del checkout.
+
+## Telegram WebApp
+
+Il client ufficiale `telegram-web-app.js` viene caricato nel root layout tramite
+`next/script`. Un initializer client chiama `Telegram.WebApp.ready()` soltanto
+quando l'API identifica una piattaforma Telegram valida. Durante SSR, nei browser
+normali o se l'API non è disponibile, il wrapper non esegue operazioni e
+l'applicazione continua a funzionare normalmente. Il BackButton nativo rimane
+nascosto nella home, è visibile nelle pagine prodotto e nel carrello e usa il
+router Next.js per tornare indietro. Il relativo listener viene sempre rimosso
+durante il cleanup. Il MainButton nativo mostra il totale Shopify e apre il
+carrello dalla home oppure avvia il checkout dalla pagina carrello; rimane
+nascosto con carrello vuoto e nelle pagine prodotto, dove resta disponibile il
+normale pulsante “Aggiungi al carrello”. Durante le azioni asincrone viene
+disabilitato e mostra lo stato di avanzamento. Nel browser normale viene mostrata
+una CTA web equivalente. Registrazione, aggiornamento e cleanup dei pulsanti
+Telegram rimangono centralizzati in `lib/telegram.ts`. Il layout usa le variabili
+CSS ufficiali per safe area e content safe area su tutti i lati, con fallback a
+`0px` quando vengono aperte nel browser normale.
 
 ## Configurazione Shopify
 
@@ -122,6 +147,7 @@ https://slink-telegram-app.delicate-brook-10e2.workers.dev
 ## Verifiche
 
 ```bash
+npm run typecheck
 npm run lint
 npm run build
 npm run build:vinext
