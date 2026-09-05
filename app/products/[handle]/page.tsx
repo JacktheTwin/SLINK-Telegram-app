@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand-mark";
 import { CartLink } from "@/components/cart-link";
 import { ProductVariantSelector } from "@/components/product-variant-selector";
 import {
@@ -30,15 +31,19 @@ export default async function ProductPage({ params }: ProductPageProps) {
         : "Impossibile recuperare il prodotto.";
 
     return (
-      <main className="telegram-safe-page mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        <nav className="flex items-center justify-between gap-4">
-          <Link className="text-sm font-medium text-neutral-600" href="/">
-            ← Tutti i prodotti
+      <main className="telegram-safe-page app-shell">
+        <nav className="app-topbar">
+          <Link className="app-icon-button web-only-control px-3" href="/">
+            <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+              <path d="m15 18-6-6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+            </svg>
+            Prodotti
           </Link>
+          <BrandMark />
           <CartLink />
         </nav>
         <p
-          className="mt-8 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          className="app-alert mt-6"
           role="alert"
         >
           {message}
@@ -52,72 +57,70 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
 
   return (
-    <main className="telegram-safe-page mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-      <nav className="flex items-center justify-between gap-4">
+    <main className="telegram-safe-page app-shell">
+      <nav className="app-topbar">
         <Link
-          className="inline-flex text-sm font-medium text-neutral-600 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
+          className="app-icon-button web-only-control px-3"
           href="/"
         >
-          ← Tutti i prodotti
+          <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+            <path d="m15 18-6-6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+          </svg>
+          Prodotti
         </Link>
+        <BrandMark />
         <CartLink />
       </nav>
 
-      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:gap-12">
+      <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start lg:gap-8">
         <section aria-label={`Immagini di ${product.title}`}>
           {product.images.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="product-gallery">
               {product.images.map((image, index) => (
                 <div
-                  className={`relative aspect-square overflow-hidden rounded-xl bg-neutral-100 ${
-                    index === 0 ? "col-span-2" : ""
-                  }`}
+                  className="product-gallery-item"
                   key={image.url}
                 >
                   <Image
                     alt={image.altText || product.title}
                     className="object-cover"
                     fill
-                    loading={index === 0 ? "eager" : "lazy"}
-                    sizes={
-                      index === 0
-                        ? "(max-width: 1023px) 100vw, 60vw"
-                        : "(max-width: 1023px) 50vw, 30vw"
-                    }
+                    preload={index === 0}
+                    sizes="(max-width: 639px) 88vw, (max-width: 899px) 70vw, 34vw"
                     src={image.url}
                   />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex aspect-square items-center justify-center rounded-xl bg-neutral-100 px-6 text-center text-sm text-neutral-500">
+            <div className="product-gallery-item flex items-center justify-center px-6 text-center text-sm text-[var(--app-muted)]">
               Immagine non disponibile
             </div>
           )}
         </section>
 
-        <section aria-labelledby="product-title" className="lg:pt-2">
-          <p className="text-sm font-medium text-neutral-500">Slinklab</p>
+        <section aria-labelledby="product-title" className="surface-panel p-5 sm:p-6 lg:sticky lg:top-5">
+          <p className="brand-kicker">SLINK selection</p>
           <h1
-            className="mt-2 text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl"
+            className="product-title mt-2"
             id="product-title"
           >
             {product.title}
           </h1>
 
-          <div className="mt-6">
-            <h2 className="text-sm font-semibold text-neutral-900">
-              Descrizione
-            </h2>
-            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-neutral-600 sm:text-base">
-              {product.description || "Descrizione non disponibile."}
-            </p>
-          </div>
-
           <ProductVariantSelector
             options={product.options}
             variants={product.variants}
           />
+
+          <div className="mt-6">
+            <h2 className="text-xs font-extrabold tracking-[0.1em] text-[var(--app-text)] uppercase">
+              Dettagli
+            </h2>
+            <p className="product-description mt-2 whitespace-pre-line">
+              {product.description || "Descrizione non disponibile."}
+            </p>
+          </div>
         </section>
       </div>
     </main>

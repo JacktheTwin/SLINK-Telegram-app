@@ -1,19 +1,26 @@
+import { BrandMark } from "@/components/brand-mark";
 import { CartView } from "@/components/cart-view";
 import Link from "next/link";
 
 export default function CartPage() {
   return (
-    <main className="telegram-safe-page mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-8">
+    <main className="telegram-safe-page app-shell">
+      <nav className="app-topbar">
         <Link
-          className="inline-flex text-sm font-medium text-neutral-600 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
+          className="app-icon-button web-only-control px-3"
           href="/"
         >
-          ← Continua gli acquisti
+          <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+            <path d="m15 18-6-6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+          </svg>
+          Shop
         </Link>
-        <h1 className="mt-5 text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl">
-          Carrello
-        </h1>
+        <BrandMark />
+      </nav>
+
+      <header className="mt-6 mb-5">
+        <p className="brand-kicker">Il tuo ordine</p>
+        <h1 className="product-title mt-1">Carrello</h1>
       </header>
 
       <CartView />

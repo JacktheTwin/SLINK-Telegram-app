@@ -3,18 +3,25 @@
 import { useCart } from "@/components/cart-provider";
 import type { ShopifyMoney } from "@/lib/shopify";
 import {
+  getTelegramStartProductHandle,
   initializeTelegramWebApp,
   isRunningInTelegram,
   setupTelegramBackButton,
   setupTelegramMainButton,
 } from "@/lib/telegram";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import Script from "next/script";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 
 type TelegramEnvironment = "browser" | "pending" | "telegram";
+const TELEGRAM_SDK_READY_EVENT = "slinklab:telegram-sdk-ready";
 
-function subscribeToTelegramEnvironment(): () => void {
-  return () => undefined;
+function subscribeToTelegramEnvironment(onStoreChange: () => void): () => void {
+  window.addEventListener(TELEGRAM_SDK_READY_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener(TELEGRAM_SDK_READY_EVENT, onStoreChange);
+  };
 }
 
 function getTelegramEnvironmentSnapshot(): TelegramEnvironment {
@@ -23,6 +30,10 @@ function getTelegramEnvironmentSnapshot(): TelegramEnvironment {
 
 function getServerTelegramEnvironmentSnapshot(): TelegramEnvironment {
   return "pending";
+}
+
+function notifyTelegramSdkReady(): void {
+  window.dispatchEvent(new Event(TELEGRAM_SDK_READY_EVENT));
 }
 
 function formatMoney(money: ShopifyMoney): string {
@@ -42,6 +53,7 @@ export function TelegramWebAppInitializer() {
   } = useCart();
   const pathname = usePathname();
   const router = useRouter();
+  const startParamWasHandled = useRef(false);
   const telegramEnvironment = useSyncExternalStore(
     subscribeToTelegramEnvironment,
     getTelegramEnvironmentSnapshot,
@@ -77,6 +89,37 @@ export function TelegramWebAppInitializer() {
   }, [checkout, isMainButtonBusy, isMainButtonVisible, pathname, router]);
 
   useEffect(() => {
+    const root = document.documentElement;
+
+    if (telegramEnvironment === "telegram") {
+      root.dataset.telegram = "true";
+    } else {
+      delete root.dataset.telegram;
+    }
+
+    return () => {
+      delete root.dataset.telegram;
+    };
+  }, [telegramEnvironment]);
+
+  useEffect(() => {
+    if (
+      telegramEnvironment !== "telegram" ||
+      pathname !== "/" ||
+      startParamWasHandled.current
+    ) {
+      return;
+    }
+
+    startParamWasHandled.current = true;
+    const productHandle = getTelegramStartProductHandle();
+
+    if (productHandle) {
+      router.replace(`/products/${encodeURIComponent(productHandle)}`);
+    }
+  }, [pathname, router, telegramEnvironment]);
+
+  useEffect(() => {
     initializeTelegramWebApp();
 
     const shouldShowBackButton =
@@ -90,10 +133,12 @@ export function TelegramWebAppInitializer() {
   useEffect(
     () =>
       setupTelegramMainButton({
+        color: "#008892",
         isBusy: isMainButtonBusy,
         isVisible: isMainButtonVisible,
         onClick: handleMainButtonClick,
         text: mainButtonText,
+        textColor: "#ffffff",
       }),
     [
       handleMainButtonClick,
@@ -103,24 +148,30 @@ export function TelegramWebAppInitializer() {
     ],
   );
 
-  if (telegramEnvironment !== "browser" || !isMainButtonVisible) {
-    return null;
-  }
-
   return (
     <>
-      <div aria-hidden className="h-24" />
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur-sm sm:px-6">
-        <button
-          aria-busy={isMainButtonBusy}
-          className="mx-auto block w-full max-w-6xl rounded-xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-400"
-          disabled={isMainButtonBusy}
-          onClick={handleMainButtonClick}
-          type="button"
-        >
-          {mainButtonText}
-        </button>
-      </div>
+      <Script
+        id="telegram-web-app-sdk"
+        onLoad={notifyTelegramSdkReady}
+        src="https://telegram.org/js/telegram-web-app.js?63"
+        strategy="afterInteractive"
+      />
+      {telegramEnvironment === "browser" && isMainButtonVisible ? (
+        <>
+          <div aria-hidden className="web-main-cta-spacer" />
+          <div className="web-main-cta">
+            <button
+              aria-busy={isMainButtonBusy}
+              className="app-cta mx-auto flex w-full max-w-4xl"
+              disabled={isMainButtonBusy}
+              onClick={handleMainButtonClick}
+              type="button"
+            >
+              {mainButtonText}
+            </button>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

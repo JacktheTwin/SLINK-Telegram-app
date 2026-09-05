@@ -13,14 +13,22 @@ type TelegramMainButton = {
   offClick: (callback: () => void) => void;
   onClick: (callback: () => void) => void;
   setText: (text: string) => void;
+  setParams?: (params: {
+    color?: string;
+    text_color?: string;
+  }) => void;
   show: () => void;
   showProgress: (leaveActive?: boolean) => void;
 };
 
 type TelegramWebApp = {
   BackButton?: unknown;
+  initDataUnsafe?: {
+    start_param?: unknown;
+  };
   MainButton?: unknown;
   platform: string;
+  expand?: () => void;
   ready: () => void;
 };
 
@@ -108,6 +116,18 @@ export function isRunningInTelegram(): boolean {
   return Boolean(platform && platform !== "unknown");
 }
 
+export function getTelegramStartProductHandle(): string | null {
+  const startParam = getTelegramWebApp()?.initDataUnsafe?.start_param;
+
+  if (typeof startParam !== "string" || !startParam.startsWith("product_")) {
+    return null;
+  }
+
+  const handle = startParam.slice("product_".length).trim();
+
+  return /^[a-z0-9][a-z0-9-]{0,254}$/i.test(handle) ? handle : null;
+}
+
 export function initializeTelegramWebApp(): boolean {
   const webApp = getTelegramWebApp();
 
@@ -122,10 +142,15 @@ export function initializeTelegramWebApp(): boolean {
   try {
     webApp.ready();
     readyWasCalled = true;
-    return true;
   } catch {
     return false;
   }
+
+  if (typeof webApp.expand === "function") {
+    safelyRunTelegramMethod(() => webApp.expand?.());
+  }
+
+  return true;
 }
 
 export function setupTelegramBackButton(
@@ -188,17 +213,21 @@ export function setupTelegramBackButton(
 }
 
 type TelegramMainButtonOptions = {
+  color?: string;
   isBusy: boolean;
   isVisible: boolean;
   onClick: () => void;
   text: string;
+  textColor?: string;
 };
 
 export function setupTelegramMainButton({
+  color,
   isBusy,
   isVisible,
   onClick,
   text,
+  textColor,
 }: TelegramMainButtonOptions): () => void {
   const webApp = getTelegramWebApp();
 
@@ -222,6 +251,9 @@ export function setupTelegramMainButton({
   let listenerWasRegistered = false;
 
   try {
+    if (typeof mainButton.setParams === "function") {
+      mainButton.setParams({ color, text_color: textColor });
+    }
     mainButton.setText(normalizedText);
 
     if (isBusy) {

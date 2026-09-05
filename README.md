@@ -1,6 +1,6 @@
 # SLINK Telegram App
 
-Storefront mobile-first per Slinklab, sviluppato come progetto separato dal sito Shopify esistente.
+Storefront mobile-first per SLINK, sviluppato come progetto separato dal sito Shopify esistente.
 
 ## Funzionalità corrente
 
@@ -46,8 +46,9 @@ duplicati durante la preparazione asincrona del checkout.
 
 ## Telegram WebApp
 
-Il client ufficiale `telegram-web-app.js` viene caricato nel root layout tramite
-`next/script`. Un initializer client chiama `Telegram.WebApp.ready()` soltanto
+Il client ufficiale `telegram-web-app.js` viene caricato dopo l'interfaccia tramite
+`next/script`, così una risposta lenta di Telegram non blocca il browser normale.
+Un initializer client chiama `Telegram.WebApp.ready()` soltanto
 quando l'API identifica una piattaforma Telegram valida. Durante SSR, nei browser
 normali o se l'API non è disponibile, il wrapper non esegue operazioni e
 l'applicazione continua a funzionare normalmente. Il BackButton nativo rimane
@@ -60,8 +61,27 @@ normale pulsante “Aggiungi al carrello”. Durante le azioni asincrone viene
 disabilitato e mostra lo stato di avanzamento. Nel browser normale viene mostrata
 una CTA web equivalente. Registrazione, aggiornamento e cleanup dei pulsanti
 Telegram rimangono centralizzati in `lib/telegram.ts`. Il layout usa le variabili
-CSS ufficiali per safe area e content safe area su tutti i lati, con fallback a
-`0px` quando vengono aperte nel browser normale.
+CSS ufficiali per safe area e content safe area su tutti i lati, con fallback alle
+safe area del browser. Il MainButton usa il colore brand `#008892`.
+
+## Esperienza e identità visiva
+
+La Mini App mantiene l'identità SLINK attraverso palette teal, fotografia
+Shopify, tipografia geometrica, card con raggi generosi e CTA compatte. La
+navigazione evita header e footer da e-commerce tradizionale: usa top bar brevi,
+gallery prodotto orizzontali con scroll snap, CTA al pollice e skeleton durante
+le transizioni. I colori di testo, sfondo, superfici e separatori leggono le
+variabili tema Telegram con fallback light/dark per il browser, mentre il teal
+del brand rimane costante.
+
+Gli asset ufficiali del marchio sono raccolti in `public/brand`: il logo
+orizzontale è usato nelle top bar compatte e il simbolo dedicato come favicon.
+
+Le URL `/products/[handle]` sono apribili direttamente. Dal bot Telegram si può
+usare uno start parameter nel formato `product_<shopify-handle>`; la Mini App lo
+converte nella route prodotto senza duplicare ID o dati Shopify. Collezioni e
+campagne richiederanno route reali dedicate prima di poter ricevere deep link:
+non vengono simulate con contenuti hardcoded.
 
 ## Configurazione Shopify
 

@@ -103,12 +103,31 @@ export function ProductVariantSelector({
   }
 
   return (
-    <div className="mt-6 border-t border-neutral-200 pt-6">
+    <div className="mt-6 border-t border-[var(--app-line)] pt-5">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        {selectedVariant ? (
+          <>
+            <span className="text-2xl font-extrabold tracking-tight text-[var(--app-text)]">
+              {formatMoney(selectedVariant.price)}
+            </span>
+            {selectedVariant.compareAtPrice ? (
+              <span className="text-sm text-[var(--app-muted)] line-through">
+                {formatMoney(selectedVariant.compareAtPrice)}
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-sm font-semibold text-[var(--app-muted)]">
+            Prezzo non disponibile
+          </span>
+        )}
+      </div>
+
       {selectableOptions.length > 0 ? (
-        <div className="space-y-5">
+        <div className="mt-6 space-y-5">
           {selectableOptions.map((option) => (
             <fieldset key={option.id}>
-              <legend className="text-sm font-medium text-neutral-900">
+              <legend className="text-xs font-extrabold tracking-[0.08em] text-[var(--app-text)] uppercase">
                 {option.name}
               </legend>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -122,14 +141,8 @@ export function ProductVariantSelector({
                   return (
                     <button
                       aria-pressed={isSelected}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 ${
-                        isSelected
-                          ? "border-neutral-900 bg-neutral-900 text-white"
-                          : isAvailable
-                            ? "border-neutral-300 bg-white text-neutral-900"
-                            : "border-neutral-200 bg-neutral-50 text-neutral-400 line-through"
-                      }`}
-                      disabled={isMutating}
+                      className="option-chip"
+                      disabled={isMutating || !isAvailable}
                       key={value}
                       onClick={() => selectOption(option.name, value)}
                       type="button"
@@ -142,33 +155,14 @@ export function ProductVariantSelector({
             </fieldset>
           ))}
 
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs leading-5 text-[var(--app-muted)]">
             Le opzioni barrate non sono disponibili con la selezione corrente.
           </p>
         </div>
       ) : null}
 
       <div className="mt-6">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          {selectedVariant ? (
-            <>
-              <span className="text-2xl font-semibold text-neutral-900">
-                {formatMoney(selectedVariant.price)}
-              </span>
-              {selectedVariant.compareAtPrice ? (
-                <span className="text-base text-neutral-500 line-through">
-                  {formatMoney(selectedVariant.compareAtPrice)}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="text-sm font-medium text-neutral-600">
-              Prezzo non disponibile
-            </span>
-          )}
-        </div>
-
-        <p className="mt-3 text-sm text-neutral-600">
+        <p className="text-xs text-[var(--app-muted)]">
           Variante: {" "}
           {selectedVariant
             ? selectedVariant.title === "Default Title"
@@ -179,10 +173,10 @@ export function ProductVariantSelector({
 
         <p
           aria-live="polite"
-          className={`mt-1 text-sm font-medium ${
+          className={`mt-1 text-xs font-bold ${
             selectedVariant?.availableForSale
-              ? "text-emerald-700"
-              : "text-red-700"
+              ? "text-[var(--brand)]"
+              : "text-[var(--app-danger)]"
           }`}
         >
           {!selectedVariant
@@ -193,7 +187,7 @@ export function ProductVariantSelector({
         </p>
 
         <button
-          className="mt-5 w-full rounded-xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-600"
+          className="app-cta mt-5 w-full"
           data-merchandise-id={selectedVariant?.id}
           disabled={
             !selectedVariant?.availableForSale ||
@@ -211,21 +205,21 @@ export function ProductVariantSelector({
         </button>
 
         {cartError ? (
-          <p className="mt-3 text-sm text-red-700" role="alert">
+          <p className="app-alert mt-3" role="alert">
             {cartError}
           </p>
         ) : null}
 
         {cartNotice ? (
-          <p className="mt-3 text-sm text-amber-800" role="status">
+          <p className="app-notice mt-3" role="status">
             {cartNotice}
           </p>
         ) : null}
 
         {addedVariantId === selectedVariant?.id ? (
-          <p className="mt-3 text-sm text-emerald-700" role="status">
+          <p className="app-notice mt-3" role="status">
             Prodotto aggiunto. {" "}
-            <Link className="font-semibold underline" href="/cart">
+            <Link className="text-action underline" href="/cart">
               Apri il carrello
               {cart && cart.totalQuantity > 0
                 ? ` (${cart.totalQuantity})`
