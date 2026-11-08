@@ -24,7 +24,32 @@ Il progetto contiene:
 - passaggio al checkout Shopify tramite il solo `cart.checkoutUrl` restituito
   dalla Storefront API;
 - integrazione con l'API ufficiale Telegram WebApp, senza cambiare il
-  comportamento nel browser normale.
+  comportamento nel browser normale;
+- interfaccia e contenuti Shopify in italiano, inglese, tedesco e francese, con
+  selettore di lingua in alto.
+
+## Lingua
+
+Le lingue disponibili sono quelle attive sullo store Shopify (IT, EN, DE, FR),
+elencate in `lib/i18n/index.ts`; i testi dell'interfaccia sono in
+`lib/i18n/messages.ts`. La lingua viene scelta in quest'ordine:
+
+1. cookie `slink_language`, impostato dal selettore di lingua;
+2. header `Accept-Language` del dispositivo;
+3. italiano come lingua predefinita.
+
+Ogni query della Storefront API, carrello compreso, usa
+`@inContext(language: ...)`: titoli, descrizioni, opzioni, handle e checkout
+arrivano quindi da Shopify sempre nella stessa lingua. Senza questa direttiva
+Shopify sceglierebbe la lingua dall'`Accept-Language` della singola richiesta:
+le pagine renderizzate dal server riceverebbero l'inglese e il carrello,
+caricato dal browser, la lingua del dispositivo.
+
+Shopify traduce anche gli handle (es. `manual-double-action-pump` →
+`pompa-manuale-a-doppia-azione`). L'handle della lingua predefinita è valido in
+ogni lingua; se l'URL contiene l'handle di un'altra lingua, per esempio dopo un
+cambio lingua, `getProductByHandle` lo cerca nelle altre lingue e ricarica il
+prodotto tramite ID.
 
 La comunicazione Shopify è centralizzata in `lib/shopify` e usa GraphQL tramite
 `fetch()`. L'accesso a Telegram WebApp è centralizzato in `lib/telegram.ts`.
@@ -66,13 +91,36 @@ safe area del browser. Il MainButton usa il colore brand `#008892`.
 
 ## Esperienza e identità visiva
 
-La Mini App mantiene l'identità SLINK attraverso palette teal, fotografia
-Shopify, tipografia geometrica, card con raggi generosi e CTA compatte. La
-navigazione evita header e footer da e-commerce tradizionale: usa top bar brevi,
-gallery prodotto orizzontali con scroll snap, CTA al pollice e skeleton durante
-le transizioni. I colori di testo, sfondo, superfici e separatori leggono le
-variabili tema Telegram con fallback light/dark per il browser, mentre il teal
-del brand rimane costante.
+Il sistema visivo segue la skill `design-taste-frontend` (vedi sotto):
+interfaccia neutra, colore portato da foto e prodotti, il teal SLINK come unico
+accento (pulsante principale, link, focus), font Figtree caricato con
+`next/font/google`, pulsanti e chip a pillola, raggi 20/12/8 px e
+micro-interazioni discrete (scheda che si alza di 2 px, foto che zooma del 3%,
+pulsanti che scendono alla pressione). L'hero della home entra con
+un'animazione una sola volta al caricamento.
+
+La home mostra la foto ufficiale della prima collezione Shopify con immagine,
+un titolo che dice cosa vende SLINK e i chip delle categorie. Le categorie sono
+le collezioni Shopify non vuote, esclusa `all`; il filtro usa l'ID numerico
+della collezione (`/?c=<id>`), stabile in ogni lingua a differenza dell'handle.
+Le foto prodotto sono mostrate intere (`object-contain`) su un fondo bianco
+fisso, coerente anche nel tema scuro di Telegram.
+
+I colori di testo, sfondo, superfici e separatori leggono le variabili tema
+Telegram con fallback light/dark per il browser, mentre il teal del brand
+rimane costante.
+
+## Skill per gli agenti
+
+`.claude/skills/design-taste-frontend/` contiene la skill di design
+"tasteskill" (licenza MIT, file `LICENSE` nella stessa cartella). Claude Code la
+carica automaticamente come skill di progetto. La cartella (circa 39 MB) è
+esclusa da git tramite `.gitignore`, insieme ai file di lavoro `.taste-skill/`
+creati dai suoi script: su un altro computer va reinstallata a mano copiando
+`skills/taste-skill` dal repository della skill in
+`.claude/skills/design-taste-frontend/`. È pensata per siti vetrina statici: in questa Mini App se ne
+applicano le regole su testi, colore, tipografia, foto e micro-interazioni,
+non la struttura "una sezione per schermata". La cartella è esclusa da ESLint.
 
 Gli asset ufficiali del marchio sono raccolti in `public/brand`: il logo
 orizzontale è usato nelle top bar compatte e il simbolo dedicato come favicon.
@@ -173,5 +221,21 @@ npm run build
 npm run build:vinext
 ```
 
-La home mostra un messaggio leggibile se la configurazione manca, Shopify risponde
-con un errore HTTP o la risposta contiene errori GraphQL.
+Se la configurazione manca, Shopify risponde con un errore HTTP o la risposta
+contiene errori GraphQL, home e pagina prodotto mostrano un messaggio generico
+nella lingua scelta; il dettaglio tecnico finisce soltanto nei log del server.
+
+## Sicurezza
+
+- Gli handle prodotto vengono validati (lettere minuscole, cifre, trattini, al
+  massimo 255 caratteri) prima di interrogare Shopify: un URL non valido
+  risponde 404 senza chiamate all'API.
+- La ricerca dell'handle nelle altre lingue avviene in parallelo e non fallisce
+  se una sola lingua dà errore. Trovato il prodotto, la pagina reindirizza
+  all'handle nella lingua corrente, così la ricerca si ripete al massimo una
+  volta per ogni cambio lingua.
+- Il checkout si apre soltanto su URL `https` il cui host è il dominio
+  principale dello store (letto da Shopify) o quello configurato in
+  `NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN`.
+- All'utente arrivano soltanto messaggi localizzati e gli userErrors di Shopify;
+  i messaggi interni restano nei log.

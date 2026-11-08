@@ -1,19 +1,16 @@
-import type { ShopifyMoney, ShopifyProduct } from "@/lib/shopify";
+import { formatMoney, messages, type Language } from "@/lib/i18n";
+import type { ShopifyProduct } from "@/lib/shopify";
 import Image from "next/image";
 import Link from "next/link";
 
 type ProductCardProps = {
+  language: Language;
   product: ShopifyProduct;
 };
 
-function formatMoney(money: ShopifyMoney): string {
-  return new Intl.NumberFormat("it-CH", {
-    style: "currency",
-    currency: money.currencyCode,
-  }).format(Number.parseFloat(money.amount));
-}
+export function ProductCard({ language, product }: ProductCardProps) {
+  const t = messages[language];
 
-export function ProductCard({ product }: ProductCardProps) {
   return (
     <article className="h-full">
       <Link
@@ -24,22 +21,20 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.featuredImage ? (
             <Image
               alt={product.featuredImage.altText || product.title}
-              className={`object-cover ${
-                product.availableForSale ? "" : "grayscale"
-              }`}
+              className={product.availableForSale ? undefined : "grayscale"}
               fill
               sizes="(max-width: 639px) 50vw, (max-width: 899px) 33vw, 25vw"
               src={product.featuredImage.url}
             />
           ) : (
-            <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[var(--app-muted)]">
-              Immagine non disponibile
+            <div className="flex h-full items-center justify-center px-4 text-center text-sm text-[var(--app-muted)]">
+              {t.common.imageUnavailable}
             </div>
           )}
 
           {!product.availableForSale ? (
             <span className="app-badge">
-              Esaurito
+              {t.card.soldOut}
             </span>
           ) : null}
         </div>
@@ -49,14 +44,14 @@ export function ProductCard({ product }: ProductCardProps) {
             {product.title}
           </h2>
 
-          <div className="mt-auto flex flex-wrap items-baseline gap-x-2 gap-y-1 pt-2">
+          <div className="mt-auto flex flex-wrap items-baseline gap-x-2 gap-y-1 pt-1">
             <span className="product-card-price">
-              {product.priceVaries ? "Da " : ""}
-              {formatMoney(product.price)}
+              {product.priceVaries ? `${t.card.from} ` : ""}
+              {formatMoney(product.price, language)}
             </span>
             {product.compareAtPrice ? (
               <span className="product-card-compare">
-                {formatMoney(product.compareAtPrice)}
+                {formatMoney(product.compareAtPrice, language)}
               </span>
             ) : null}
           </div>

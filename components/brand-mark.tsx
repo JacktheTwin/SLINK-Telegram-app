@@ -1,3 +1,6 @@
+"use client";
+
+import { useI18n } from "@/components/language-provider";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -6,6 +9,7 @@ type BrandMarkProps = {
 };
 
 export function BrandMark({ linked = true }: BrandMarkProps) {
+  const { t } = useI18n();
   const logo = (
     <Image
       alt="SLINK"
@@ -19,7 +23,7 @@ export function BrandMark({ linked = true }: BrandMarkProps) {
 
   return linked ? (
     <Link
-      aria-label="SLINK, torna alla home"
+      aria-label={t.common.brandHome}
       className="inline-flex no-underline"
       href="/"
     >

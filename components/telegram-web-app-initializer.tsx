@@ -1,7 +1,8 @@
 "use client";
 
 import { useCart } from "@/components/cart-provider";
-import type { ShopifyMoney } from "@/lib/shopify";
+import { useI18n } from "@/components/language-provider";
+import { formatMoney } from "@/lib/i18n";
 import {
   getTelegramStartProductHandle,
   initializeTelegramWebApp,
@@ -36,13 +37,6 @@ function notifyTelegramSdkReady(): void {
   window.dispatchEvent(new Event(TELEGRAM_SDK_READY_EVENT));
 }
 
-function formatMoney(money: ShopifyMoney): string {
-  return new Intl.NumberFormat("it-CH", {
-    style: "currency",
-    currency: money.currencyCode,
-  }).format(Number.parseFloat(money.amount));
-}
-
 export function TelegramWebAppInitializer() {
   const {
     cart,
@@ -51,6 +45,7 @@ export function TelegramWebAppInitializer() {
     isInitializing,
     isMutating,
   } = useCart();
+  const { language, t } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
   const startParamWasHandled = useRef(false);
@@ -66,11 +61,11 @@ export function TelegramWebAppInitializer() {
   const isCartCtaVisible = pathname === "/cart" && hasCartProducts;
   const isMainButtonVisible = isHomeCtaVisible || isCartCtaVisible;
   const isMainButtonBusy = isInitializing || isMutating || isCheckingOut;
-  const total = cart ? formatMoney(cart.cost.totalAmount) : "";
+  const total = cart ? formatMoney(cart.cost.totalAmount, language) : "";
   const mainButtonText = isHomeCtaVisible
-    ? `Carrello · ${total}`
+    ? t.cart.mainCart(total)
     : isCartCtaVisible
-      ? `Checkout · ${total}`
+      ? t.cart.mainCheckout(total)
       : "";
 
   const handleMainButtonClick = useCallback(() => {

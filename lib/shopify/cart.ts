@@ -1,10 +1,13 @@
 import {
   ShopifyGraphQLError,
+  getStoreHostname,
   shopifyFetch,
+  withoutDefaultOption,
   type ShopifyMoney,
   type ShopifyProductImage,
   type ShopifySelectedOption,
 } from "@/lib/shopify";
+import type { Language } from "@/lib/i18n";
 
 export type ShopifyCartLine = {
   id: string;
@@ -87,6 +90,8 @@ type CartLinesRemoveMutation = {
   cartLinesRemove: CartMutationPayload;
 };
 
+// `errors` contiene gli userErrors di Shopify, già nella lingua richiesta, che
+// l'interfaccia può mostrare.
 export class ShopifyCartMutationError extends Error {
   constructor(
     action: string,
@@ -157,7 +162,8 @@ const CART_FIELDS = `
 
 const CART_QUERY = `
   ${CART_FIELDS}
-  query Cart($id: ID!) {
+  query Cart($id: ID!, $language: LanguageCode)
+  @inContext(language: $language) {
     cart(id: $id) {
       ...CartFields
     }
@@ -166,7 +172,8 @@ const CART_QUERY = `
 
 const CART_CREATE_MUTATION = `
   ${CART_FIELDS}
-  mutation CartCreate($input: CartInput) {
+  mutation CartCreate($input: CartInput, $language: LanguageCode)
+  @inContext(language: $language) {
     cartCreate(input: $input) {
       cart {
         ...CartFields
@@ -187,7 +194,11 @@ const CART_CREATE_MUTATION = `
 
 const CART_LINES_ADD_MUTATION = `
   ${CART_FIELDS}
-  mutation CartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
+  mutation CartLinesAdd(
+    $cartId: ID!
+    $lines: [CartLineInput!]!
+    $language: LanguageCode
+  ) @inContext(language: $language) {
     cartLinesAdd(cartId: $cartId, lines: $lines) {
       cart {
         ...CartFields
@@ -208,7 +219,11 @@ const CART_LINES_ADD_MUTATION = `
 
 const CART_LINES_UPDATE_MUTATION = `
   ${CART_FIELDS}
-  mutation CartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
+  mutation CartLinesUpdate(
+    $cartId: ID!
+    $lines: [CartLineUpdateInput!]!
+    $language: LanguageCode
+  ) @inContext(language: $language) {
     cartLinesUpdate(cartId: $cartId, lines: $lines) {
       cart {
         ...CartFields
@@ -229,7 +244,11 @@ const CART_LINES_UPDATE_MUTATION = `
 
 const CART_LINES_REMOVE_MUTATION = `
   ${CART_FIELDS}
-  mutation CartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
+  mutation CartLinesRemove(
+    $cartId: ID!
+    $lineIds: [ID!]!
+    $language: LanguageCode
+  ) @inContext(language: $language) {
     cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
       cart {
         ...CartFields
@@ -257,17 +276,12 @@ function getMutationCart(
   }
 
   if (!payload.cart) {
-    throw new ShopifyCartMutationError(action, [
-      {
-        field: null,
-        message: "Shopify non ha restituito il carrello aggiornato",
-        code: null,
-      },
-    ]);
+    // Messaggio interno per i log: l'interfaccia mostra il proprio testo.
+    throw new Error(action + ": Shopify non ha restituito il carrello aggiornato.");
   }
 
   return {
-    cart: payload.cart,
+    cart: normalizeCart(payload.cart),
     warnings: payload.warnings,
   };
 }
@@ -297,7 +311,61 @@ export function isInvalidShopifyCartError(error: unknown): boolean {
   );
 }
 
-export async function getCart(cartId: string): Promise<ShopifyCart | null> {
+type ShopDomainQuery = {
+  shop: {
+    primaryDomain: {
+      host: string;
+    };
+  };
+};
+
+const SHOP_DOMAIN_QUERY = `
+  query ShopDomain {
+    shop {
+      primaryDomain {
+        host
+      }
+    }
+  }
+`;
+
+let checkoutHostsPromise: Promise<string[]> | null = null;
+
+// Host su cui può aprirsi il checkout: il dominio principale dello store
+// letto da Shopify e il dominio configurato in NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN.
+// Non cambiano durante la sessione: la richiesta parte una volta sola.
+export function getCheckoutHosts(): Promise<string[]> {
+  checkoutHostsPromise ??= shopifyFetch<ShopDomainQuery>({
+    query: SHOP_DOMAIN_QUERY,
+  })
+    .then((data) => [data.shop.primaryDomain.host, getStoreHostname()])
+    .catch((error: unknown) => {
+      checkoutHostsPromise = null;
+      throw error;
+    });
+
+  return checkoutHostsPromise;
+}
+
+function normalizeCart(cart: ShopifyCart): ShopifyCart {
+  return {
+    ...cart,
+    lines: {
+      nodes: cart.lines.nodes.map((line) => ({
+        ...line,
+        merchandise: {
+          ...line.merchandise,
+          selectedOptions: withoutDefaultOption(line.merchandise.selectedOptions),
+        },
+      })),
+    },
+  };
+}
+
+export async function getCart(
+  cartId: string,
+  language: Language,
+): Promise<ShopifyCart | null> {
   const normalizedCartId = cartId.trim();
 
   if (!normalizedCartId) {
@@ -306,20 +374,21 @@ export async function getCart(cartId: string): Promise<ShopifyCart | null> {
 
   const data = await shopifyFetch<CartQuery>({
     query: CART_QUERY,
-    variables: { id: normalizedCartId },
+    variables: { id: normalizedCartId, language },
   });
 
-  return data.cart;
+  return data.cart ? normalizeCart(data.cart) : null;
 }
 
 export async function createCart(
   lines: ShopifyCartLineInput[],
+  language: Language,
 ): Promise<ShopifyCartOperationResult> {
   lines.forEach(validateLineInput);
 
   const data = await shopifyFetch<CartCreateMutation>({
     query: CART_CREATE_MUTATION,
-    variables: { input: { lines } },
+    variables: { input: { lines }, language },
   });
 
   return getMutationCart(data.cartCreate, "Impossibile creare il carrello");
@@ -328,12 +397,13 @@ export async function createCart(
 export async function addCartLines(
   cartId: string,
   lines: ShopifyCartLineInput[],
+  language: Language,
 ): Promise<ShopifyCartOperationResult> {
   lines.forEach(validateLineInput);
 
   const data = await shopifyFetch<CartLinesAddMutation>({
     query: CART_LINES_ADD_MUTATION,
-    variables: { cartId, lines },
+    variables: { cartId, lines, language },
   });
 
   return getMutationCart(
@@ -346,6 +416,7 @@ export async function updateCartLine(
   cartId: string,
   lineId: string,
   quantity: number,
+  language: Language,
 ): Promise<ShopifyCartOperationResult> {
   if (!lineId.trim()) {
     throw new Error("Line ID mancante.");
@@ -360,6 +431,7 @@ export async function updateCartLine(
     variables: {
       cartId,
       lines: [{ id: lineId, quantity }],
+      language,
     },
   });
 
@@ -372,6 +444,7 @@ export async function updateCartLine(
 export async function removeCartLine(
   cartId: string,
   lineId: string,
+  language: Language,
 ): Promise<ShopifyCartOperationResult> {
   if (!lineId.trim()) {
     throw new Error("Line ID mancante.");
@@ -379,7 +452,7 @@ export async function removeCartLine(
 
   const data = await shopifyFetch<CartLinesRemoveMutation>({
     query: CART_LINES_REMOVE_MUTATION,
-    variables: { cartId, lineIds: [lineId] },
+    variables: { cartId, lineIds: [lineId], language },
   });
 
   return getMutationCart(

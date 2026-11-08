@@ -1,26 +1,25 @@
+import { BackLink } from "@/components/back-link";
 import { BrandMark } from "@/components/brand-mark";
 import { CartView } from "@/components/cart-view";
-import Link from "next/link";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { getRequestI18n } from "@/lib/i18n/server";
 
-export default function CartPage() {
+export default async function CartPage() {
+  const { t } = await getRequestI18n();
+
   return (
     <main className="telegram-safe-page app-shell">
       <nav className="app-topbar">
-        <Link
-          className="app-icon-button web-only-control px-3"
-          href="/"
-        >
-          <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
-            <path d="m15 18-6-6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-          </svg>
-          Shop
-        </Link>
+        <BackLink href="/" label={t.common.backToShop} />
         <BrandMark />
+        <div className="topbar-actions">
+          <LanguageSwitcher />
+        </div>
       </nav>
 
       <header className="mt-6 mb-5">
-        <p className="brand-kicker">Il tuo ordine</p>
-        <h1 className="product-title mt-1">Carrello</h1>
+        <p className="meta-label">{t.cart.kicker}</p>
+        <h1 className="product-title mt-1">{t.cart.title}</h1>
       </header>
 
       <CartView />

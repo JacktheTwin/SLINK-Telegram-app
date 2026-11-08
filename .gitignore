@@ -40,3 +40,8 @@ yarn-error.log*
 pnpm-debug.log*
 .vinext/
 .wrangler/
+
+# Skill di design per gli agenti (terze parti, ~39 MB): installata in locale
+.claude/skills/design-taste-frontend/
+# File di lavoro creati dagli script della skill
+.taste-skill/

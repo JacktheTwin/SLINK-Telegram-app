@@ -1,9 +1,13 @@
 "use client";
 
+import { useI18n } from "@/components/language-provider";
+import type { Language, Messages } from "@/lib/i18n";
 import {
+  ShopifyCartMutationError,
   addCartLines,
   createCart,
   getCart,
+  getCheckoutHosts,
   isInvalidShopifyCartError,
   removeCartLine,
   updateCartLine,
@@ -11,7 +15,7 @@ import {
   type ShopifyCartOperationResult,
   type ShopifyCartWarning,
 } from "@/lib/shopify/cart";
-import { openCheckout } from "@/lib/shopify/checkout";
+import { isTrustedCheckoutUrl, openCheckout } from "@/lib/shopify/checkout";
 import {
   createContext,
   useCallback,
@@ -45,23 +49,37 @@ type CartProviderProps = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-function getReadableError(error: unknown, fallback: string): string {
+type CartErrorMessages = Messages["cartErrors"];
+
+function getReadableError(
+  error: unknown,
+  fallback: string,
+  connectionHint: string,
+): string {
   if (error instanceof TypeError) {
-    return fallback + " Controlla la connessione e riprova.";
+    return fallback + " " + connectionHint;
   }
 
-  return error instanceof Error ? error.message : fallback;
+  // I messaggi degli userErrors arrivano da Shopify nella lingua richiesta.
+  if (error instanceof ShopifyCartMutationError) {
+    return [fallback, ...error.errors.map((item) => item.message)].join(" ");
+  }
+
+  return fallback;
 }
 
-function getWarningMessage(warnings: ShopifyCartWarning[]): string {
+function getWarningMessage(
+  warnings: ShopifyCartWarning[],
+  errors: CartErrorMessages,
+): string {
   const messages = warnings.map((warning) => {
     switch (warning.code) {
       case "MERCHANDISE_NOT_ENOUGH_STOCK":
-        return "La quantità richiesta supera lo stock disponibile. Shopify ha mantenuto la quantità massima acquistabile.";
+        return errors.notEnoughStock;
       case "MERCHANDISE_OUT_OF_STOCK":
-        return "Un prodotto nel carrello è esaurito. Rimuovilo prima di continuare.";
+        return errors.outOfStock;
       default:
-        return "Shopify ha aggiornato il carrello con un avviso: " + warning.message;
+        return errors.warning(warning.message);
     }
   });
 
@@ -70,15 +88,18 @@ function getWarningMessage(warnings: ShopifyCartWarning[]): string {
 
 async function recoverCartAfterError(
   cartId: string,
+  language: Language,
 ): Promise<ShopifyCart | null | undefined> {
   try {
-    return await getCart(cartId);
+    return await getCart(cartId, language);
   } catch (error: unknown) {
     return isInvalidShopifyCartError(error) ? null : undefined;
   }
 }
 
 export function CartProvider({ children }: CartProviderProps) {
+  const { language, t } = useI18n();
+  const errors = t.cartErrors;
   const [cart, setCart] = useState<ShopifyCart | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -95,11 +116,9 @@ export function CartProvider({ children }: CartProviderProps) {
     try {
       window.localStorage.setItem(CART_STORAGE_KEY, nextCart.id);
     } catch {
-      setError(
-        "Il carrello è stato aggiornato, ma il browser non ha potuto salvarne l'identificatore.",
-      );
+      setError(errors.storeIdFailed);
     }
-  }, []);
+  }, [errors]);
 
   const clearStoredCart = useCallback((message?: string) => {
     setCart(null);
@@ -119,10 +138,10 @@ export function CartProvider({ children }: CartProviderProps) {
       storeCart(result.cart);
 
       if (result.warnings.length > 0) {
-        setNotice(getWarningMessage(result.warnings));
+        setNotice(getWarningMessage(result.warnings, errors));
       }
     },
-    [storeCart],
+    [errors, storeCart],
   );
 
   const refreshCart = useCallback(async () => {
@@ -134,7 +153,7 @@ export function CartProvider({ children }: CartProviderProps) {
       storedCartId = window.localStorage.getItem(CART_STORAGE_KEY)?.trim() || null;
     } catch {
       setCart(null);
-      setError("Il browser non permette di leggere il carrello salvato.");
+      setError(errors.readFailed);
       setNotice(null);
       setIsInitializing(false);
       return;
@@ -149,32 +168,23 @@ export function CartProvider({ children }: CartProviderProps) {
     }
 
     try {
-      const remoteCart = await getCart(storedCartId);
+      const remoteCart = await getCart(storedCartId, language);
 
       if (!remoteCart) {
-        clearStoredCart(
-          "Il carrello salvato non è più disponibile. Puoi iniziarne uno nuovo.",
-        );
+        clearStoredCart(errors.savedUnavailable);
       } else {
         storeCart(remoteCart);
       }
     } catch (loadError: unknown) {
       if (isInvalidShopifyCartError(loadError)) {
-        clearStoredCart(
-          "Il carrello salvato non è più valido. Puoi iniziarne uno nuovo.",
-        );
+        clearStoredCart(errors.savedInvalid);
       } else {
-        setError(
-          getReadableError(
-            loadError,
-            "Non è stato possibile recuperare il carrello da Shopify.",
-          ),
-        );
+        setError(getReadableError(loadError, errors.loadFailed, errors.connection));
       }
     } finally {
       setIsInitializing(false);
     }
-  }, [clearStoredCart, storeCart]);
+  }, [clearStoredCart, errors, language, storeCart]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -199,12 +209,12 @@ export function CartProvider({ children }: CartProviderProps) {
         let result: ShopifyCartOperationResult;
 
         if (!cart) {
-          result = await createCart([line]);
+          result = await createCart([line], language);
         } else {
           try {
-            result = await addCartLines(cart.id, [line]);
+            result = await addCartLines(cart.id, [line], language);
           } catch (mutationError: unknown) {
-            const recoveredCart = await recoverCartAfterError(cart.id);
+            const recoveredCart = await recoverCartAfterError(cart.id, language);
 
             if (recoveredCart !== null) {
               if (recoveredCart) {
@@ -215,19 +225,14 @@ export function CartProvider({ children }: CartProviderProps) {
             }
 
             clearStoredCart();
-            result = await createCart([line]);
+            result = await createCart([line], language);
           }
         }
 
         applyCartResult(result);
         return result.warnings.length === 0;
       } catch (mutationError: unknown) {
-        setError(
-          getReadableError(
-            mutationError,
-            "Non è stato possibile aggiungere il prodotto al carrello.",
-          ),
-        );
+        setError(getReadableError(mutationError, errors.addFailed, errors.connection));
         return false;
       } finally {
         setIsMutating(false);
@@ -237,8 +242,10 @@ export function CartProvider({ children }: CartProviderProps) {
       applyCartResult,
       cart,
       clearStoredCart,
+      errors,
       isInitializing,
       isMutating,
+      language,
       storeCart,
     ],
   );
@@ -254,27 +261,20 @@ export function CartProvider({ children }: CartProviderProps) {
       setNotice(null);
 
       try {
-        const result = await updateCartLine(cart.id, lineId, quantity);
+        const result = await updateCartLine(cart.id, lineId, quantity, language);
         applyCartResult(result);
         return result.warnings.length === 0;
       } catch (mutationError: unknown) {
-        const recoveredCart = await recoverCartAfterError(cart.id);
+        const recoveredCart = await recoverCartAfterError(cart.id, language);
 
         if (recoveredCart === null) {
-          clearStoredCart(
-            "Il carrello non è più disponibile. Puoi iniziarne uno nuovo.",
-          );
+          clearStoredCart(errors.unavailable);
         } else {
           if (recoveredCart) {
             storeCart(recoveredCart);
           }
 
-          setError(
-            getReadableError(
-              mutationError,
-              "Non è stato possibile aggiornare la quantità.",
-            ),
-          );
+          setError(getReadableError(mutationError, errors.updateFailed, errors.connection));
         }
 
         return false;
@@ -286,8 +286,10 @@ export function CartProvider({ children }: CartProviderProps) {
       applyCartResult,
       cart,
       clearStoredCart,
+      errors,
       isInitializing,
       isMutating,
+      language,
       storeCart,
     ],
   );
@@ -303,27 +305,20 @@ export function CartProvider({ children }: CartProviderProps) {
       setNotice(null);
 
       try {
-        const result = await removeCartLine(cart.id, lineId);
+        const result = await removeCartLine(cart.id, lineId, language);
         applyCartResult(result);
         return result.warnings.length === 0;
       } catch (mutationError: unknown) {
-        const recoveredCart = await recoverCartAfterError(cart.id);
+        const recoveredCart = await recoverCartAfterError(cart.id, language);
 
         if (recoveredCart === null) {
-          clearStoredCart(
-            "Il carrello non è più disponibile. Puoi iniziarne uno nuovo.",
-          );
+          clearStoredCart(errors.unavailable);
         } else {
           if (recoveredCart) {
             storeCart(recoveredCart);
           }
 
-          setError(
-            getReadableError(
-              mutationError,
-              "Non è stato possibile rimuovere il prodotto.",
-            ),
-          );
+          setError(getReadableError(mutationError, errors.removeFailed, errors.connection));
         }
 
         return false;
@@ -335,17 +330,17 @@ export function CartProvider({ children }: CartProviderProps) {
       applyCartResult,
       cart,
       clearStoredCart,
+      errors,
       isInitializing,
       isMutating,
+      language,
       storeCart,
     ],
   );
 
   const prepareCheckout = useCallback(async (): Promise<string | null> => {
     if (!cart || cart.totalQuantity < 1 || cart.lines.nodes.length === 0) {
-      setError(
-        "Il carrello è vuoto. Aggiungi almeno un prodotto prima del checkout.",
-      );
+      setError(errors.empty);
       return null;
     }
 
@@ -357,12 +352,13 @@ export function CartProvider({ children }: CartProviderProps) {
     setNotice(null);
 
     try {
-      const remoteCart = await getCart(cart.id);
+      const [remoteCart, trustedHosts] = await Promise.all([
+        getCart(cart.id, language),
+        getCheckoutHosts(),
+      ]);
 
       if (!remoteCart) {
-        clearStoredCart(
-          "Il carrello non è più disponibile. Puoi iniziarne uno nuovo.",
-        );
+        clearStoredCart(errors.unavailable);
         return null;
       }
 
@@ -372,34 +368,29 @@ export function CartProvider({ children }: CartProviderProps) {
         remoteCart.totalQuantity < 1 ||
         remoteCart.lines.nodes.length === 0
       ) {
-        setError(
-          "Il carrello è vuoto. Aggiungi almeno un prodotto prima del checkout.",
-        );
+        setError(errors.empty);
         return null;
       }
 
       const checkoutUrl = remoteCart.checkoutUrl?.trim();
 
       if (!checkoutUrl) {
-        setError(
-          "Shopify non ha restituito l'indirizzo del checkout. Riprova tra poco.",
-        );
+        setError(errors.noCheckoutUrl);
+        return null;
+      }
+
+      if (!isTrustedCheckoutUrl(checkoutUrl, trustedHosts)) {
+        console.error("Checkout URL non attendibile:", checkoutUrl);
+        setError(errors.checkoutFailed);
         return null;
       }
 
       return checkoutUrl;
     } catch (checkoutError: unknown) {
       if (isInvalidShopifyCartError(checkoutError)) {
-        clearStoredCart(
-          "Il carrello non è più valido. Puoi iniziarne uno nuovo.",
-        );
+        clearStoredCart(errors.invalid);
       } else {
-        setError(
-          getReadableError(
-            checkoutError,
-            "Non è stato possibile preparare il checkout Shopify.",
-          ),
-        );
+        setError(getReadableError(checkoutError, errors.checkoutFailed, errors.connection));
       }
 
       return null;
@@ -407,8 +398,10 @@ export function CartProvider({ children }: CartProviderProps) {
   }, [
     cart,
     clearStoredCart,
+    errors,
     isInitializing,
     isMutating,
+    language,
     storeCart,
   ]);
 
@@ -420,25 +413,15 @@ export function CartProvider({ children }: CartProviderProps) {
     checkoutLockRef.current = true;
     setIsCheckingOut(true);
 
-    try {
-      const checkoutUrl = await prepareCheckout();
+    const checkoutUrl = await prepareCheckout();
 
-      if (!checkoutUrl) {
-        checkoutLockRef.current = false;
-        setIsCheckingOut(false);
-        return;
-      }
-
-      openCheckout(checkoutUrl);
-    } catch (checkoutError: unknown) {
-      setError(
-        checkoutError instanceof Error
-          ? checkoutError.message
-          : "Non è stato possibile aprire il checkout Shopify.",
-      );
+    if (!checkoutUrl) {
       checkoutLockRef.current = false;
       setIsCheckingOut(false);
+      return;
     }
+
+    openCheckout(checkoutUrl);
   }, [prepareCheckout]);
 
   const value = useMemo<CartContextValue>(

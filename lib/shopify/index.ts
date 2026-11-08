@@ -1,7 +1,10 @@
+import { LANGUAGES, type Language } from "@/lib/i18n";
+
 const REQUIRED_API_VERSION = "2026-07";
 
 type ShopifyConfig = {
   endpoint: string;
+  hostname: string;
   storefrontToken: string;
 };
 
@@ -40,6 +43,14 @@ export type ShopifyProduct = {
   compareAtPrice: ShopifyMoney | null;
 };
 
+export type ShopifyCollection = {
+  // Parte numerica del GID: stabile in tutte le lingue, a differenza
+  // dell'handle che Shopify traduce.
+  id: string;
+  title: string;
+  image: ShopifyProductImage | null;
+};
+
 export type ShopifyProductOption = {
   id: string;
   name: string;
@@ -65,6 +76,7 @@ export type ShopifyProductDetail = {
   title: string;
   handle: string;
   description: string;
+  vendor: string;
   availableForSale: boolean;
   images: ShopifyProductImage[];
   options: ShopifyProductOption[];
@@ -98,6 +110,28 @@ type ProductsQuery = {
   };
 };
 
+type CollectionProductsQuery = {
+  collection: {
+    products: {
+      nodes: ProductNode[];
+    };
+  } | null;
+};
+
+type CollectionsQuery = {
+  collections: {
+    nodes: Array<{
+      id: string;
+      handle: string;
+      title: string;
+      image: ShopifyProductImage | null;
+      products: {
+        nodes: Array<{ id: string }>;
+      };
+    }>;
+  };
+};
+
 type ProductOptionNode = {
   id: string;
   name: string;
@@ -120,6 +154,7 @@ type ProductDetailNode = {
   title: string;
   handle: string;
   description: string;
+  vendor: string;
   availableForSale: boolean;
   images: {
     nodes: ShopifyProductImage[];
@@ -133,6 +168,17 @@ type ProductDetailNode = {
 type ProductQuery = {
   product: ProductDetailNode | null;
 };
+
+// Valore dell'unica opzione dei prodotti senza varianti. Shopify ne traduce il
+// nome ("Title", "Titolo"...) ma non il valore: le opzioni con questo valore
+// vengono tolte qui, così i componenti non devono conoscerlo.
+const DEFAULT_VARIANT_VALUE = "Default Title";
+
+export function withoutDefaultOption(
+  options: ShopifySelectedOption[],
+): ShopifySelectedOption[] {
+  return options.filter((option) => option.value !== DEFAULT_VARIANT_VALUE);
+}
 
 export class ShopifyConfigurationError extends Error {
   constructor(message: string) {
@@ -203,8 +249,13 @@ function getShopifyConfig(): ShopifyConfig {
   return {
     endpoint:
       "https://" + hostname + "/api/" + apiVersion + "/graphql.json",
+    hostname,
     storefrontToken,
   };
+}
+
+export function getStoreHostname(): string {
+  return getShopifyConfig().hostname;
 }
 
 export async function shopifyFetch<TData>({
@@ -241,41 +292,85 @@ export async function shopifyFetch<TData>({
   return payload.data;
 }
 
+const PRODUCT_CARD_FIELDS = `
+  fragment ProductCardFields on Product {
+    id
+    title
+    handle
+    availableForSale
+    featuredImage {
+      url
+      altText
+    }
+    priceRange {
+      minVariantPrice {
+        amount
+        currencyCode
+      }
+      maxVariantPrice {
+        amount
+        currencyCode
+      }
+    }
+    variants(first: 250) {
+      nodes {
+        price {
+          amount
+          currencyCode
+        }
+        compareAtPrice {
+          amount
+          currencyCode
+        }
+      }
+      pageInfo {
+        hasNextPage
+      }
+    }
+  }
+`;
+
 const PRODUCTS_QUERY = `
-  query Products($first: Int!) {
+  ${PRODUCT_CARD_FIELDS}
+  query Products($first: Int!, $language: LanguageCode)
+  @inContext(language: $language) {
     products(first: $first, sortKey: CREATED_AT, reverse: true) {
       nodes {
+        ...ProductCardFields
+      }
+    }
+  }
+`;
+
+const COLLECTION_PRODUCTS_QUERY = `
+  ${PRODUCT_CARD_FIELDS}
+  query CollectionProducts($id: ID!, $first: Int!, $language: LanguageCode)
+  @inContext(language: $language) {
+    collection(id: $id) {
+      products(first: $first, sortKey: CREATED, reverse: true) {
+        nodes {
+          ...ProductCardFields
+        }
+      }
+    }
+  }
+`;
+
+const COLLECTIONS_QUERY = `
+  query Collections($language: LanguageCode)
+  @inContext(language: $language) {
+    collections(first: 20) {
+      nodes {
         id
-        title
         handle
-        availableForSale
-        featuredImage {
+        title
+        image {
           url
           altText
         }
-        priceRange {
-          minVariantPrice {
-            amount
-            currencyCode
-          }
-          maxVariantPrice {
-            amount
-            currencyCode
-          }
-        }
-        variants(first: 250) {
+        products(first: 1) {
           nodes {
-            price {
-              amount
-              currencyCode
-            }
-            compareAtPrice {
-              amount
-              currencyCode
-            }
-          }
-          pageInfo {
-            hasNextPage
+            id
           }
         }
       }
@@ -283,46 +378,74 @@ const PRODUCTS_QUERY = `
   }
 `;
 
-const PRODUCT_QUERY = `
-  query Product($handle: String!) {
+const PRODUCT_FIELDS = `
+  fragment ProductFields on Product {
+    id
+    title
+    handle
+    description
+    vendor
+    availableForSale
+    images(first: 12) {
+      nodes {
+        url
+        altText
+      }
+    }
+    options {
+      id
+      name
+      optionValues {
+        name
+      }
+    }
+    variants(first: 250) {
+      nodes {
+        id
+        title
+        availableForSale
+        price {
+          amount
+          currencyCode
+        }
+        compareAtPrice {
+          amount
+          currencyCode
+        }
+        selectedOptions {
+          name
+          value
+        }
+      }
+    }
+  }
+`;
+
+const PRODUCT_BY_HANDLE_QUERY = `
+  ${PRODUCT_FIELDS}
+  query ProductByHandle($handle: String!, $language: LanguageCode)
+  @inContext(language: $language) {
+    product(handle: $handle) {
+      ...ProductFields
+    }
+  }
+`;
+
+const PRODUCT_BY_ID_QUERY = `
+  ${PRODUCT_FIELDS}
+  query ProductById($id: ID!, $language: LanguageCode)
+  @inContext(language: $language) {
+    product(id: $id) {
+      ...ProductFields
+    }
+  }
+`;
+
+const PRODUCT_ID_BY_HANDLE_QUERY = `
+  query ProductIdByHandle($handle: String!, $language: LanguageCode)
+  @inContext(language: $language) {
     product(handle: $handle) {
       id
-      title
-      handle
-      description
-      availableForSale
-      images(first: 12) {
-        nodes {
-          url
-          altText
-        }
-      }
-      options {
-        id
-        name
-        optionValues {
-          name
-        }
-      }
-      variants(first: 250) {
-        nodes {
-          id
-          title
-          availableForSale
-          price {
-            amount
-            currencyCode
-          }
-          compareAtPrice {
-            amount
-            currencyCode
-          }
-          selectedOptions {
-            name
-            value
-          }
-        }
-      }
     }
   }
 `;
@@ -399,64 +522,169 @@ function getProductCompareAtPrice(
     : null;
 }
 
-export async function getProducts(): Promise<ShopifyProduct[]> {
+const PRODUCTS_LIMIT = 24;
+const COLLECTION_GID_PREFIX = "gid://shopify/Collection/";
+
+function toProductCard(product: ProductNode): ShopifyProduct {
+  const price = product.priceRange.minVariantPrice;
+  const priceVaries = !hasSameMoneyValue(
+    price,
+    product.priceRange.maxVariantPrice,
+  );
+
+  return {
+    id: product.id,
+    title: product.title,
+    handle: product.handle,
+    availableForSale: product.availableForSale,
+    featuredImage: product.featuredImage,
+    price,
+    priceVaries,
+    compareAtPrice: getProductCompareAtPrice(product, price),
+  };
+}
+
+export async function getProducts(
+  language: Language,
+  collectionId?: string,
+): Promise<ShopifyProduct[]> {
+  if (collectionId && /^\d+$/.test(collectionId)) {
+    const data = await shopifyFetch<CollectionProductsQuery>({
+      query: COLLECTION_PRODUCTS_QUERY,
+      variables: {
+        id: COLLECTION_GID_PREFIX + collectionId,
+        first: PRODUCTS_LIMIT,
+        language,
+      },
+    });
+
+    return (data.collection?.products.nodes ?? []).map(toProductCard);
+  }
+
   const data = await shopifyFetch<ProductsQuery>({
     query: PRODUCTS_QUERY,
-    variables: { first: 12 },
+    variables: { first: PRODUCTS_LIMIT, language },
   });
 
-  return data.products.nodes.map((product) => {
-    const price = product.priceRange.minVariantPrice;
-    const priceVaries = !hasSameMoneyValue(
-      price,
-      product.priceRange.maxVariantPrice,
-    );
+  return data.products.nodes.map(toProductCard);
+}
 
-    return {
-      id: product.id,
-      title: product.title,
-      handle: product.handle,
-      availableForSale: product.availableForSale,
-      featuredImage: product.featuredImage,
-      price,
-      priceVaries,
-      compareAtPrice: getProductCompareAtPrice(product, price),
-    };
+// Collezioni da mostrare come categorie: esclude quelle vuote e "all", la
+// collezione automatica di Shopify che contiene già tutti i prodotti.
+export async function getCollections(
+  language: Language,
+): Promise<ShopifyCollection[]> {
+  const data = await shopifyFetch<CollectionsQuery>({
+    query: COLLECTIONS_QUERY,
+    variables: { language },
   });
+
+  return data.collections.nodes
+    .filter(
+      (collection) =>
+        collection.handle !== "all" && collection.products.nodes.length > 0,
+    )
+    .map((collection) => ({
+      id: collection.id.replace(COLLECTION_GID_PREFIX, ""),
+      title: collection.title,
+      image: collection.image,
+    }));
+}
+
+type ProductIdQuery = {
+  product: { id: string } | null;
+};
+
+// Gli handle Shopify sono lettere minuscole, cifre e trattini. Un valore
+// diverso non può corrispondere a un prodotto: si risponde 404 senza
+// interrogare Shopify, così URL arbitrari non consumano chiamate all'API.
+const HANDLE_PATTERN = /^[\p{Ll}\p{Lo}\p{N}]+(?:-[\p{Ll}\p{Lo}\p{N}]+)*$/u;
+const MAX_HANDLE_LENGTH = 255;
+
+function isValidHandle(handle: string): boolean {
+  return handle.length <= MAX_HANDLE_LENGTH && HANDLE_PATTERN.test(handle);
+}
+
+// Shopify traduce anche gli handle: quello della lingua predefinita funziona in
+// ogni lingua, quelli tradotti solo nella propria. Dopo un cambio lingua l'URL
+// può quindi contenere l'handle di un'altra lingua: lo si cerca in parallelo
+// nelle altre lingue e si ricarica il prodotto tramite ID nella lingua
+// richiesta. La pagina prodotto poi reindirizza all'handle tradotto, così la
+// ricerca avviene una volta per cambio lingua. Una lingua che fallisce non
+// blocca le altre: l'errore conta solo se nessuna trova il prodotto.
+async function findProductByOtherLanguageHandle(
+  handle: string,
+  language: Language,
+): Promise<ProductDetailNode | null> {
+  const results = await Promise.allSettled(
+    LANGUAGES.filter((item) => item.code !== language).map((item) =>
+      shopifyFetch<ProductIdQuery>({
+        query: PRODUCT_ID_BY_HANDLE_QUERY,
+        variables: { handle, language: item.code },
+      }),
+    ),
+  );
+
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value.product) {
+      const data = await shopifyFetch<ProductQuery>({
+        query: PRODUCT_BY_ID_QUERY,
+        variables: { id: result.value.product.id, language },
+      });
+
+      return data.product;
+    }
+  }
+
+  const failure = results.find((result) => result.status === "rejected");
+
+  if (failure) {
+    throw failure.reason;
+  }
+
+  return null;
 }
 
 export async function getProductByHandle(
   handle: string,
+  language: Language,
 ): Promise<ShopifyProductDetail | null> {
   const normalizedHandle = handle.trim();
 
-  if (!normalizedHandle) {
+  if (!isValidHandle(normalizedHandle)) {
     return null;
   }
 
   const data = await shopifyFetch<ProductQuery>({
-    query: PRODUCT_QUERY,
-    variables: { handle: normalizedHandle },
+    query: PRODUCT_BY_HANDLE_QUERY,
+    variables: { handle: normalizedHandle, language },
   });
+  const product =
+    data.product ??
+    (await findProductByOtherLanguageHandle(normalizedHandle, language));
 
-  if (!data.product) {
+  if (!product) {
     return null;
   }
-
-  const product = data.product;
 
   return {
     id: product.id,
     title: product.title,
     handle: product.handle,
     description: product.description,
+    vendor: product.vendor,
     availableForSale: product.availableForSale,
     images: product.images.nodes,
-    options: product.options.map((option) => ({
-      id: option.id,
-      name: option.name,
-      values: option.optionValues.map((value) => value.name),
-    })),
+    options: product.options
+      .map((option) => ({
+        id: option.id,
+        name: option.name,
+        values: option.optionValues.map((value) => value.name),
+      }))
+      .filter(
+        (option) =>
+          !(option.values.length === 1 && option.values[0] === DEFAULT_VARIANT_VALUE),
+      ),
     variants: product.variants.nodes.map((variant) => ({
       id: variant.id,
       title: variant.title,
@@ -466,7 +694,7 @@ export async function getProductByHandle(
         variant.price,
         variant.compareAtPrice,
       ),
-      selectedOptions: variant.selectedOptions,
+      selectedOptions: withoutDefaultOption(variant.selectedOptions),
     })),
   };
 }

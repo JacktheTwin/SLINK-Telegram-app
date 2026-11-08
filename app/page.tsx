@@ -1,53 +1,119 @@
 import { BrandMark } from "@/components/brand-mark";
 import { CartLink } from "@/components/cart-link";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { ProductCard } from "@/components/product-card";
-import { getProducts, type ShopifyProduct } from "@/lib/shopify";
+import { getRequestI18n } from "@/lib/i18n/server";
+import {
+  getCollections,
+  getProducts,
+  type ShopifyCollection,
+  type ShopifyProduct,
+} from "@/lib/shopify";
+import Image from "next/image";
+import Link from "next/link";
 import { connection } from "next/server";
 
-export default async function Home() {
-  await connection();
+type HomeProps = {
+  searchParams: Promise<{
+    c?: string | string[];
+  }>;
+};
 
+export default async function Home({ searchParams }: HomeProps) {
+  await connection();
+  const { language, t } = await getRequestI18n();
+  const { c } = await searchParams;
+  const requestedCollectionId = typeof c === "string" ? c : undefined;
+
+  let collections: ShopifyCollection[] = [];
   let products: ShopifyProduct[] = [];
   let shopifyError: string | null = null;
 
   try {
-    products = await getProducts();
+    [collections, products] = await Promise.all([
+      getCollections(language),
+      getProducts(language, requestedCollectionId),
+    ]);
   } catch (error: unknown) {
     console.error("Shopify products query failed:", error);
-    shopifyError =
-      error instanceof Error
-        ? error.message
-        : "Impossibile recuperare i prodotti.";
+    // I dettagli tecnici restano nei log del server.
+    shopifyError = t.home.loadError;
   }
+
+  const activeCollection = collections.find(
+    (collection) => collection.id === requestedCollectionId,
+  );
+  // La foto dell'hero arriva dalle collezioni Shopify (la prima che ne ha una,
+  // oggi i gonfiabili) e resta la stessa con ogni filtro, come il titolo.
+  const heroImage =
+    collections.find((collection) => collection.image)?.image ?? null;
 
   return (
     <main className="telegram-safe-page app-shell">
       <header className="app-topbar">
         <BrandMark linked={false} />
-        <CartLink />
+        <div className="topbar-actions">
+          <LanguageSwitcher />
+          <CartLink />
+        </div>
       </header>
 
-      <section className="hero-panel" aria-labelledby="home-title">
-        <p className="text-[0.6875rem] font-extrabold tracking-[0.14em] text-white/75 uppercase">
-          Mini shop
-        </p>
-        <h1 className="hero-title" id="home-title">
-          Il tuo stile, a portata di chat.
-        </h1>
-        <p className="hero-copy">
-          Una selezione SLINK essenziale, veloce e pensata per Telegram.
-        </p>
+      <section aria-labelledby="home-title" className="home-hero">
+        {heroImage ? (
+          <div className="home-hero-media">
+            <Image
+              alt={heroImage.altText || t.home.heroImage}
+              className="object-cover"
+              fill
+              preload
+              sizes="(max-width: 1152px) 100vw, 72rem"
+              src={heroImage.url}
+            />
+          </div>
+        ) : null}
+
+        <div className="home-hero-copy">
+          <p className="brand-line">{t.common.brandLine}</p>
+          <h1 className="home-title" id="home-title">
+            {t.home.title}
+          </h1>
+          <p className="home-lead">{t.home.copy}</p>
+        </div>
       </section>
 
-      <section aria-labelledby="products-heading" className="mt-7 sm:mt-9">
-        <div className="mb-4 flex items-end justify-between gap-4">
+      <section aria-labelledby="products-heading" className="mt-8 sm:mt-12">
+        {collections.length > 0 ? (
+          <nav aria-label={t.home.categories} className="category-bar">
+            <Link
+              aria-current={activeCollection ? undefined : "page"}
+              className="category-chip"
+              href="/"
+              scroll={false}
+            >
+              {t.home.all}
+            </Link>
+            {collections.map((collection) => (
+              <Link
+                aria-current={
+                  collection.id === requestedCollectionId ? "page" : undefined
+                }
+                className="category-chip"
+                href={`/?c=${collection.id}`}
+                key={collection.id}
+                scroll={false}
+              >
+                {collection.title}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
+
+        <div className="mt-6 mb-4 flex items-baseline justify-between gap-4">
           <h2 className="section-heading" id="products-heading">
-            In evidenza
+            {activeCollection?.title ?? t.home.allProducts}
           </h2>
           {!shopifyError && products.length > 0 ? (
-            <p className="section-meta">
-              {products.length} {products.length === 1 ? "prodotto" : "prodotti"}
-            </p>
+            <p className="meta-label">{t.home.productCount(products.length)}</p>
           ) : null}
         </div>
 
@@ -60,17 +126,19 @@ export default async function Home() {
           </p>
         ) : products.length === 0 ? (
           <div className="surface-panel p-7 text-center">
-            <p className="text-sm font-semibold text-[var(--app-text)]">
-              La selezione è in aggiornamento
+            <p className="text-base font-medium text-[var(--app-text)]">
+              {activeCollection ? t.home.categoryEmpty : t.home.emptyTitle}
             </p>
-            <p className="mt-1 text-xs leading-5 text-[var(--app-muted)]">
-              Torna tra poco per scoprire i prodotti disponibili.
-            </p>
+            {activeCollection ? null : (
+              <p className="mt-1 text-sm leading-6 text-[var(--app-muted)]">
+                {t.home.emptyText}
+              </p>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-5 sm:gap-y-8 lg:grid-cols-4">
+          <div className="product-grid">
             {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product.id} language={language} product={product} />
             ))}
           </div>
         )}

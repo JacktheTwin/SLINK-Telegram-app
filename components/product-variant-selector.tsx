@@ -1,8 +1,9 @@
 "use client";
 
 import { useCart } from "@/components/cart-provider";
+import { useI18n } from "@/components/language-provider";
+import { formatMoney } from "@/lib/i18n";
 import type {
-  ShopifyMoney,
   ShopifyProductOption,
   ShopifyProductVariant,
 } from "@/lib/shopify";
@@ -13,13 +14,6 @@ type ProductVariantSelectorProps = {
   options: ShopifyProductOption[];
   variants: ShopifyProductVariant[];
 };
-
-function formatMoney(money: ShopifyMoney): string {
-  return new Intl.NumberFormat("it-CH", {
-    style: "currency",
-    currency: money.currencyCode,
-  }).format(Number.parseFloat(money.amount));
-}
 
 function getInitialSelections(
   variants: ShopifyProductVariant[],
@@ -57,20 +51,13 @@ export function ProductVariantSelector({
     isMutating,
     notice: cartNotice,
   } = useCart();
+  const { language, t } = useI18n();
   const [selections, setSelections] = useState<Record<string, string>>(() =>
     getInitialSelections(variants),
   );
   const [addedVariantId, setAddedVariantId] = useState<string | null>(null);
   const selectedVariant =
     variants.find((variant) => matchesSelections(variant, selections)) ?? null;
-  const selectableOptions = options.filter(
-    (option) =>
-      !(
-        option.name === "Title" &&
-        option.values.length === 1 &&
-        option.values[0] === "Default Title"
-      ),
-  );
 
   function selectOption(name: string, value: string) {
     setAddedVariantId(null);
@@ -107,27 +94,27 @@ export function ProductVariantSelector({
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         {selectedVariant ? (
           <>
-            <span className="text-2xl font-extrabold tracking-tight text-[var(--app-text)]">
-              {formatMoney(selectedVariant.price)}
+            <span className="text-2xl font-medium tracking-tight tabular-nums text-[var(--app-text)]">
+              {formatMoney(selectedVariant.price, language)}
             </span>
             {selectedVariant.compareAtPrice ? (
               <span className="text-sm text-[var(--app-muted)] line-through">
-                {formatMoney(selectedVariant.compareAtPrice)}
+                {formatMoney(selectedVariant.compareAtPrice, language)}
               </span>
             ) : null}
           </>
         ) : (
           <span className="text-sm font-semibold text-[var(--app-muted)]">
-            Prezzo non disponibile
+            {t.product.priceUnavailable}
           </span>
         )}
       </div>
 
-      {selectableOptions.length > 0 ? (
+      {options.length > 0 ? (
         <div className="mt-6 space-y-5">
-          {selectableOptions.map((option) => (
+          {options.map((option) => (
             <fieldset key={option.id}>
-              <legend className="text-xs font-extrabold tracking-[0.08em] text-[var(--app-text)] uppercase">
+              <legend className="field-label">
                 {option.name}
               </legend>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -155,35 +142,36 @@ export function ProductVariantSelector({
             </fieldset>
           ))}
 
-          <p className="text-xs leading-5 text-[var(--app-muted)]">
-            Le opzioni barrate non sono disponibili con la selezione corrente.
+          <p className="text-sm leading-5 text-[var(--app-muted)]">
+            {t.product.unavailableOptionsHint}
           </p>
         </div>
       ) : null}
 
       <div className="mt-6">
-        <p className="text-xs text-[var(--app-muted)]">
-          Variante: {" "}
-          {selectedVariant
-            ? selectedVariant.title === "Default Title"
-              ? "Unica"
-              : selectedVariant.title
-            : "Nessuna variante corrispondente"}
-        </p>
+        {/* Con una sola variante la riga non aggiunge informazioni. */}
+        {options.length > 0 ? (
+          <p className="mb-1 text-sm text-[var(--app-muted)]">
+            {t.product.variant}{" "}
+            {selectedVariant
+              ? selectedVariant.title
+              : t.product.noMatchingVariant}
+          </p>
+        ) : null}
 
         <p
           aria-live="polite"
-          className={`mt-1 text-xs font-bold ${
+          className={`text-sm font-medium ${
             selectedVariant?.availableForSale
-              ? "text-[var(--brand)]"
+              ? "text-[var(--action-text)]"
               : "text-[var(--app-danger)]"
           }`}
         >
           {!selectedVariant
-            ? "Combinazione non disponibile"
+            ? t.product.combinationUnavailable
             : selectedVariant.availableForSale
-              ? "Disponibile"
-              : "Variante esaurita"}
+              ? t.product.available
+              : t.product.variantSoldOut}
         </p>
 
         <button
@@ -198,10 +186,10 @@ export function ProductVariantSelector({
           type="button"
         >
           {isInitializing
-            ? "Caricamento carrello..."
+            ? t.product.cartLoading
             : isMutating
-              ? "Aggiornamento..."
-              : "Aggiungi al carrello"}
+              ? t.product.updating
+              : t.product.addToCart}
         </button>
 
         {cartError ? (
@@ -218,9 +206,9 @@ export function ProductVariantSelector({
 
         {addedVariantId === selectedVariant?.id ? (
           <p className="app-notice mt-3" role="status">
-            Prodotto aggiunto. {" "}
+            {t.product.added}{" "}
             <Link className="text-action underline" href="/cart">
-              Apri il carrello
+              {t.product.openCart}
               {cart && cart.totalQuantity > 0
                 ? ` (${cart.totalQuantity})`
                 : ""}

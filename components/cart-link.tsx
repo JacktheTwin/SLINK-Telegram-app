@@ -1,18 +1,18 @@
 "use client";
 
 import { useCart } from "@/components/cart-provider";
+import { useI18n } from "@/components/language-provider";
 import Link from "next/link";
 
 export function CartLink() {
   const { cart, isInitializing } = useCart();
+  const { t } = useI18n();
   const quantity = cart?.totalQuantity ?? 0;
 
   return (
     <Link
       aria-label={
-        isInitializing
-          ? "Carrello in caricamento"
-          : `Carrello, ${quantity} ${quantity === 1 ? "articolo" : "articoli"}`
+        isInitializing ? t.common.cartLoading : t.common.cartCount(quantity)
       }
       className="app-icon-button shrink-0 px-3"
       href="/cart"
