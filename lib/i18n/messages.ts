@@ -4,7 +4,7 @@ const it = {
     description: "La selezione SLINK, direttamente su Telegram.",
   },
   common: {
-    brandLine: "More water, better days",
+    brandLine: "Più acqua, giorni migliori",
     brandHome: "SLINK, torna alla home",
     backToProducts: "Prodotti",
     backToShop: "Shop",
@@ -248,7 +248,7 @@ const de: Messages = {
     description: "Die SLINK-Auswahl, direkt auf Telegram.",
   },
   common: {
-    brandLine: "More water, better days",
+    brandLine: "Mehr Wasser, bessere Tage",
     brandHome: "SLINK, zurück zur Startseite",
     backToProducts: "Produkte",
     backToShop: "Shop",
@@ -370,7 +370,7 @@ const fr: Messages = {
     description: "La sélection SLINK, directement sur Telegram.",
   },
   common: {
-    brandLine: "More water, better days",
+    brandLine: "Plus d'eau, de meilleurs jours",
     brandHome: "SLINK, retour à l'accueil",
     backToProducts: "Produits",
     backToShop: "Boutique",

@@ -230,17 +230,19 @@ select:disabled {
 
 .home-hero-media {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   border-radius: var(--r-lg);
   background: var(--app-surface-muted);
   animation: hero-media-in 1.1s var(--ease-enter) both;
 }
 
-/* Le foto Shopify delle collezioni sono panoramiche: su telefono si inquadra
-   la parte bassa, dove stanno i prodotti sull'acqua. */
+/* Le foto Shopify delle collezioni sono panoramiche (3:1). Su telefono e
+   tablet il riquadro mostra circa metà della larghezza: l'inquadratura va dal
+   30% all'85% circa, così restano visibili la barca a vela a sinistra, i
+   gonfiabili e il bambino che salta a destra. */
 .home-hero-media img {
-  object-position: 58% 78%;
+  object-position: 64% 50%;
 }
 
 .home-hero-copy {

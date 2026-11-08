@@ -15,7 +15,7 @@ export default function HomeLoading() {
           <div className="skeleton h-11 w-11 rounded-full" />
         </div>
       </div>
-      <div className="skeleton mt-3 aspect-[4/3] rounded-[var(--r-lg)] sm:aspect-video min-[900px]:aspect-[3/1]" />
+      <div className="skeleton mt-3 aspect-[16/10] rounded-[var(--r-lg)] sm:aspect-video min-[900px]:aspect-[3/1]" />
       <div className="skeleton mt-6 h-3 w-36 rounded-full" />
       <div className="skeleton mt-3 h-9 w-11/12 rounded-full" />
       <div className="skeleton mt-2 h-9 w-2/3 rounded-full" />
